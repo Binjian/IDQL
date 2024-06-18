@@ -1,7 +1,7 @@
 from typing import Optional, Tuple
 
-import gym
-from gym.wrappers.pixel_observation import PixelObservationWrapper
+import gymnasium as gym
+from gymnasium.wrappers.pixel_observation import PixelObservationWrapper
 
 from jaxrl5.wrappers.frame_stack import FrameStack
 from jaxrl5.wrappers.repeat_action import RepeatAction
