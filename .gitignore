@@ -1,3 +1,4 @@
 /.python-version
 /jaxrl5.egg-info/
 __pycache__/
+/wandb/
