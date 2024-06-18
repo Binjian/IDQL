@@ -1,5 +1,5 @@
 import d4rl
-import gym
+import gymnasium as gym
 import jax
 import optax
 import wandb

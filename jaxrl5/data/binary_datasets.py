@@ -2,7 +2,7 @@
 
 import os
 
-import gym
+import gymnasium as gym
 
 try:
     import mj_envs

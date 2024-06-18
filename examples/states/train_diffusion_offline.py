@@ -1,4 +1,4 @@
-import gym
+import gymnasium as gym
 import jax
 import wandb
 from tqdm import tqdm

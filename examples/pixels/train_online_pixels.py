@@ -1,6 +1,6 @@
 #! /usr/bin/env python
 import dmcgym
-import gym
+import gymnasium as gym
 import tqdm
 import wandb
 from absl import app, flags

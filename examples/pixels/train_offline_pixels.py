@@ -3,7 +3,7 @@ import os
 import pickle
 
 import dmcgym
-import gym
+import gymnasium as gym
 import optax
 import tqdm
 import wandb
