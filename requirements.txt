@@ -1,7 +1,11 @@
 gymnasium[mujoco]
-numpy
+numpy <= 1.26
 dm_control
-jax-metal
+jax-metal == 0.0.6
+#tf-nightly
+#tf-keras == 2.16.0
+jax == 0.4.22
+jaxlib == 0.4.22
 flax
 ml_collections
 tqdm
@@ -9,7 +13,10 @@ optax
 absl-py
 scipy
 wandb
-tensorflow-probability
+tfb-nightly
+#tensorflow-probability
 dmcgym @ git+https://github.com/binjian/dmcgym
+d4rl @ git+https://github.com/binjian/d4rl
+mjrl @ git+https://github.com/binjian/mjrl
 moviepy
 imageio
