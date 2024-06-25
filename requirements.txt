@@ -13,7 +13,7 @@ optax
 absl-py
 scipy
 wandb
-tfb-nightly
+tfp-nightly
 #tensorflow-probability
 dmcgym @ git+https://github.com/binjian/dmcgym
 d4rl @ git+https://github.com/binjian/d4rl

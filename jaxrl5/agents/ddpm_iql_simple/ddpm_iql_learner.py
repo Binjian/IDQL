@@ -1,4 +1,5 @@
 """Implementations of algorithms for continuous control."""
+
 from functools import partial
 from typing import Dict, Optional, Sequence, Tuple, Union
 import flax.linen as nn
@@ -11,22 +12,38 @@ from flax import struct
 import numpy as np
 from jaxrl5.agents.agent import Agent
 from jaxrl5.data.dataset import DatasetDict
-from jaxrl5.networks import MLP, Ensemble, StateActionValue, StateValue, DDPM, FourierFeatures, cosine_beta_schedule, ddpm_sampler, MLPResNet, get_weight_decay_mask, vp_beta_schedule
+from jaxrl5.networks import (
+    MLP,
+    Ensemble,
+    StateActionValue,
+    StateValue,
+    DDPM,
+    FourierFeatures,
+    cosine_beta_schedule,
+    ddpm_sampler,
+    MLPResNet,
+    get_weight_decay_mask,
+    vp_beta_schedule,
+)
+
 
 def expectile_loss(diff, expectile=0.8):
     weight = jnp.where(diff > 0, expectile, (1 - expectile))
     return weight * (diff**2)
 
-@partial(jax.jit, static_argnames=('critic_fn'))
+
+@partial(jax.jit, static_argnames=("critic_fn"))
 def compute_q(critic_fn, critic_params, observations, actions):
-    q_values = critic_fn({'params': critic_params}, observations, actions)
+    q_values = critic_fn({"params": critic_params}, observations, actions)
     q_values = q_values.min(axis=0)
     return q_values
 
-@partial(jax.jit, static_argnames=('value_fn'))
+
+@partial(jax.jit, static_argnames=("value_fn"))
 def compute_v(value_fn, value_params, observations):
-    v_values = value_fn({'params': value_params}, observations)
+    v_values = value_fn({"params": value_params}, observations)
     return v_values
+
 
 class DDPMIQLLearner(Agent):
     score_model: TrainState
@@ -40,8 +57,8 @@ class DDPMIQLLearner(Agent):
     critic_hyperparam: float
     act_dim: int = struct.field(pytree_node=False)
     T: int = struct.field(pytree_node=False)
-    N: int #How many samples per observation
-    M: int = struct.field(pytree_node=False) #How many repeat last steps
+    N: int  # How many samples per observation
+    M: int = struct.field(pytree_node=False)  # How many repeat last steps
     clip_sampler: bool = struct.field(pytree_node=False)
     ddpm_temperature: float
     policy_temperature: float
@@ -75,7 +92,7 @@ class DDPMIQLLearner(Agent):
         N: int = 64,
         M: int = 0,
         clip_sampler: bool = True,
-        beta_schedule: str = 'vp',
+        beta_schedule: str = "vp",
         decay_steps: Optional[int] = int(3e6),
     ):
 
@@ -85,45 +102,55 @@ class DDPMIQLLearner(Agent):
         observations = observation_space.sample()
         action_dim = action_space.shape[0]
 
-        preprocess_time_cls = partial(FourierFeatures,
-                                      output_size=time_dim,
-                                      learnable=True)
+        preprocess_time_cls = partial(
+            FourierFeatures, output_size=time_dim, learnable=True
+        )
 
-        cond_model_cls = partial(MLP,
-                                hidden_dims=(time_dim * 2, time_dim * 2),
-                                activations=nn.swish,
-                                activate_final=False)
-        
+        cond_model_cls = partial(
+            MLP,
+            hidden_dims=(time_dim * 2, time_dim * 2),
+            activations=nn.swish,
+            activate_final=False,
+        )
+
         if decay_steps is not None:
             actor_lr = optax.cosine_decay_schedule(actor_lr, decay_steps)
 
-        base_model_cls = partial(MLPResNet,
-                                    use_layer_norm=actor_layer_norm,
-                                    num_blocks=actor_num_blocks,
-                                    dropout_rate=actor_dropout_rate,
-                                    out_dim=action_dim,
-                                    activations=nn.swish)
-        
-        actor_def = DDPM(time_preprocess_cls=preprocess_time_cls,
-                            cond_encoder_cls=cond_model_cls,
-                            reverse_encoder_cls=base_model_cls)
+        base_model_cls = partial(
+            MLPResNet,
+            use_layer_norm=actor_layer_norm,
+            num_blocks=actor_num_blocks,
+            dropout_rate=actor_dropout_rate,
+            out_dim=action_dim,
+            activations=nn.swish,
+        )
+
+        actor_def = DDPM(
+            time_preprocess_cls=preprocess_time_cls,
+            cond_encoder_cls=cond_model_cls,
+            reverse_encoder_cls=base_model_cls,
+        )
 
         time = jnp.zeros((1, 1))
-        observations = jnp.expand_dims(observations, axis = 0)
-        actions = jnp.expand_dims(actions, axis = 0)
-        actor_params = actor_def.init(actor_key, observations, actions,
-                                        time)['params']
+        observations = jnp.expand_dims(observations, axis=0)
+        actions = jnp.expand_dims(actions, axis=0)
+        actor_params = actor_def.init(actor_key, observations, actions, time)["params"]
 
-        score_model = TrainState.create(apply_fn=actor_def.apply,
-                                        params=actor_params,
-                                        tx=optax.adamw(learning_rate=actor_lr))
-        
-        target_score_model = TrainState.create(apply_fn=actor_def.apply,
-                                               params=actor_params,
-                                               tx=optax.GradientTransformation(
-                                                    lambda _: None, lambda _: None))
+        score_model = TrainState.create(
+            apply_fn=actor_def.apply,
+            params=actor_params,
+            tx=optax.adamw(learning_rate=actor_lr),
+        )
 
-        critic_base_cls = partial(MLP, hidden_dims=critic_hidden_dims, activate_final=True)
+        target_score_model = TrainState.create(
+            apply_fn=actor_def.apply,
+            params=actor_params,
+            tx=optax.GradientTransformation(lambda _: None, lambda _: None),
+        )
+
+        critic_base_cls = partial(
+            MLP, hidden_dims=critic_hidden_dims, activate_final=True
+        )
         critic_cls = partial(StateActionValue, base_cls=critic_base_cls)
         critic_def = Ensemble(critic_cls, num=num_qs)
         critic_params = critic_def.init(critic_key, observations, actions)["params"]
@@ -137,28 +164,31 @@ class DDPMIQLLearner(Agent):
             tx=optax.GradientTransformation(lambda _: None, lambda _: None),
         )
 
-        value_base_cls = partial(MLP, hidden_dims=critic_hidden_dims, 
-                                 use_layer_norm=value_layer_norm,
-                                 activate_final=True)
+        value_base_cls = partial(
+            MLP,
+            hidden_dims=critic_hidden_dims,
+            use_layer_norm=value_layer_norm,
+            activate_final=True,
+        )
         value_def = StateValue(base_cls=value_base_cls)
         value_params = value_def.init(value_key, observations)["params"]
         value_optimiser = optax.adam(learning_rate=value_lr)
 
-        value = TrainState.create(apply_fn=value_def.apply,
-                                  params=value_params,
-                                  tx=value_optimiser)
+        value = TrainState.create(
+            apply_fn=value_def.apply, params=value_params, tx=value_optimiser
+        )
 
-        if beta_schedule == 'cosine':
+        if beta_schedule == "cosine":
             betas = jnp.array(cosine_beta_schedule(T))
-        elif beta_schedule == 'linear':
+        elif beta_schedule == "linear":
             betas = jnp.linspace(1e-4, 2e-2, T)
-        elif beta_schedule == 'vp':
+        elif beta_schedule == "vp":
             betas = jnp.array(vp_beta_schedule(T))
         else:
-            raise ValueError(f'Invalid beta schedule: {beta_schedule}')
+            raise ValueError(f"Invalid beta schedule: {beta_schedule}")
 
         alphas = 1 - betas
-        alpha_hat = jnp.array([jnp.prod(alphas[:i + 1]) for i in range(T)])
+        alpha_hat = jnp.array([jnp.prod(alphas[: i + 1]) for i in range(T)])
 
         return cls(
             actor=None,
@@ -202,7 +232,7 @@ class DDPMIQLLearner(Agent):
         value = agent.value.apply_gradients(grads=grads)
         agent = agent.replace(value=value)
         return agent, info
-    
+
     def update_q(agent, batch: DatasetDict) -> Tuple[Agent, Dict[str, float]]:
         next_v = agent.value.apply_fn(
             {"params": agent.value.params}, batch["next_observations"]
@@ -235,29 +265,32 @@ class DDPMIQLLearner(Agent):
     def update_actor(agent, batch: DatasetDict) -> Tuple[Agent, Dict[str, float]]:
         rng = agent.rng
         key, rng = jax.random.split(rng, 2)
-        time = jax.random.randint(key, (batch['actions'].shape[0], ), 0, agent.T)
+        time = jax.random.randint(key, (batch["actions"].shape[0],), 0, agent.T)
         key, rng = jax.random.split(rng, 2)
         noise_sample = jax.random.normal(
-            key, (batch['actions'].shape[0], agent.act_dim))
-        
+            key, (batch["actions"].shape[0], agent.act_dim)
+        )
+
         alpha_hats = agent.alpha_hats[time]
         time = jnp.expand_dims(time, axis=1)
         alpha_1 = jnp.expand_dims(jnp.sqrt(alpha_hats), axis=1)
         alpha_2 = jnp.expand_dims(jnp.sqrt(1 - alpha_hats), axis=1)
-        noisy_actions = alpha_1 * batch['actions'] + alpha_2 * noise_sample
+        noisy_actions = alpha_1 * batch["actions"] + alpha_2 * noise_sample
 
         key, rng = jax.random.split(rng, 2)
 
         def actor_loss_fn(score_model_params) -> Tuple[jnp.ndarray, Dict[str, float]]:
-            eps_pred = agent.score_model.apply_fn({'params': score_model_params},
-                                       batch['observations'],
-                                       noisy_actions,
-                                       time,
-                                       rngs={'dropout': key},
-                                       training=True)
-            
-            actor_loss = (((eps_pred - noise_sample) ** 2).sum(axis = -1)).mean()
-            return actor_loss, {'actor_loss': actor_loss}
+            eps_pred = agent.score_model.apply_fn(
+                {"params": score_model_params},
+                batch["observations"],
+                noisy_actions,
+                time,
+                rngs={"dropout": key},
+                training=True,
+            )
+
+            actor_loss = (((eps_pred - noise_sample) ** 2).sum(axis=-1)).mean()
+            return actor_loss, {"actor_loss": actor_loss}
 
         grads, info = jax.grad(actor_loss_fn, has_aux=True)(agent.score_model.params)
         score_model = agent.score_model.apply_gradients(grads=grads)
@@ -267,8 +300,12 @@ class DDPMIQLLearner(Agent):
             score_model.params, agent.target_score_model.params, agent.actor_tau
         )
 
-        target_score_model = agent.target_score_model.replace(params=target_score_params)
-        new_agent = agent.replace(score_model=score_model, target_score_model=target_score_model, rng=rng)
+        target_score_model = agent.target_score_model.replace(
+            params=target_score_params
+        )
+        new_agent = agent.replace(
+            score_model=score_model, target_score_model=target_score_model, rng=rng
+        )
 
         return new_agent, info
 
@@ -277,23 +314,41 @@ class DDPMIQLLearner(Agent):
 
         assert len(observations.shape) == 1
         observations = jax.device_put(observations)
-        observations = jnp.expand_dims(observations, axis = 0).repeat(self.N, axis = 0)
+        observations = jnp.expand_dims(observations, axis=0).repeat(self.N, axis=0)
 
         score_params = self.target_score_model.params
-        actions, rng = ddpm_sampler(self.score_model.apply_fn, score_params, self.T, rng, self.act_dim, observations, self.alphas, self.alpha_hats, self.betas, self.ddpm_temperature, self.M, self.clip_sampler)
+        actions, rng = ddpm_sampler(
+            self.score_model.apply_fn,
+            score_params,
+            self.T,
+            rng,
+            self.act_dim,
+            observations,
+            self.alphas,
+            self.alpha_hats,
+            self.betas,
+            self.ddpm_temperature,
+            self.M,
+            self.clip_sampler,
+        )
         rng, _ = jax.random.split(rng, 2)
-        qs = compute_q(self.target_critic.apply_fn, self.target_critic.params, observations, actions)
+        qs = compute_q(
+            self.target_critic.apply_fn,
+            self.target_critic.params,
+            observations,
+            actions,
+        )
         idx = jnp.argmax(qs)
         action = actions[idx]
         new_rng = rng
         return np.array(action.squeeze()), self.replace(rng=new_rng)
-    
+
     @jax.jit
     def actor_update(self, batch: DatasetDict):
         new_agent = self
         new_agent, actor_info = new_agent.update_actor(batch)
         return new_agent, actor_info
-    
+
     @jax.jit
     def critic_update(self, batch: DatasetDict):
         new_agent = self

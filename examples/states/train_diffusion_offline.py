@@ -21,10 +21,12 @@ def merge_batch(batch1, batch2):
     return frozen_dict.freeze(merge)
 
 def call_main(details):
+
     wandb.init(project=details['project'], name=details['group'])
     wandb.config.update(details)
 
-    env = gym.make(details['env_name'])
+    #env = gym.make(details['env_name'])
+    env = gym.make("GymV26Environment-v0", env_id=details['env_name'])
 
     if "binary" in details['env_name']:
         ds = BinaryDataset(env)
