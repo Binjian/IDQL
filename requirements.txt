@@ -11,9 +11,10 @@ ml_collections
 tqdm
 optax
 absl-py
-scipy
+scipy==1.12
 wandb
 tfp-nightly
+tf-keras
 #tensorflow-probability
 dmcgym @ git+https://github.com/binjian/dmcgym
 d4rl @ git+https://github.com/binjian/d4rl
